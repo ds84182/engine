@@ -3015,7 +3015,7 @@ class Canvas extends NativeFieldWrapperClass2 {
   /// To end the recording, call [PictureRecorder.endRecording] on the
   /// given recorder.
   @pragma('vm:entry-point')
-  Canvas(PictureRecorder recorder, [ Rect cullRect ]) : assert(recorder != null) {
+  Canvas(PictureRecorder recorder, [ Rect cullRect ]) : assert(recorder != null), _dependencies = recorder._dependencies {
     if (recorder.isRecording)
       throw new ArgumentError('"recorder" must not already be associated with another Canvas.');
     cullRect ??= Rect.largest;
@@ -3424,6 +3424,7 @@ class Canvas extends NativeFieldWrapperClass2 {
     assert(image != null); // image is checked on the engine side
     assert(_offsetIsValid(p));
     assert(paint != null);
+    _dependencies.add(image);
     _drawImage(image, p.dx, p.dy, paint._objects, paint._data);
   }
   void _drawImage(Image image,
@@ -3446,6 +3447,7 @@ class Canvas extends NativeFieldWrapperClass2 {
     assert(_rectIsValid(src));
     assert(_rectIsValid(dst));
     assert(paint != null);
+    _dependencies.add(image);
     _drawImageRect(image,
                    src.left,
                    src.top,
@@ -3488,6 +3490,7 @@ class Canvas extends NativeFieldWrapperClass2 {
     assert(_rectIsValid(center));
     assert(_rectIsValid(dst));
     assert(paint != null);
+    _dependencies.add(image);
     _drawImageNine(image,
                    center.left,
                    center.top,
@@ -3516,6 +3519,7 @@ class Canvas extends NativeFieldWrapperClass2 {
   /// [PictureRecorder].
   void drawPicture(Picture picture) {
     assert(picture != null); // picture is checked on the engine side
+    _dependencies.add(picture);
     _drawPicture(picture);
   }
   void _drawPicture(Picture picture) native 'Canvas_drawPicture';
@@ -3644,6 +3648,7 @@ class Canvas extends NativeFieldWrapperClass2 {
     final Int32List colorBuffer = colors.isEmpty ? null : _encodeColorList(colors);
     final Float32List cullRectBuffer = cullRect?._value;
 
+    _dependencies.add(atlas);
     _drawAtlas(
       paint._objects, paint._data, atlas, rstTransformBuffer, rectBuffer,
       colorBuffer, blendMode.index, cullRectBuffer
@@ -3687,6 +3692,7 @@ class Canvas extends NativeFieldWrapperClass2 {
     if (colors != null && colors.length * 4 != rectCount)
       throw new ArgumentError('If non-null, "colors" length must be one fourth the length of "rstTransforms" and "rects".');
 
+    _dependencies.add(atlas);
     _drawAtlas(
       paint._objects, paint._data, atlas, rstTransforms, rects,
       colors, blendMode.index, cullRect?._value
@@ -3718,6 +3724,8 @@ class Canvas extends NativeFieldWrapperClass2 {
                    int color,
                    double elevation,
                    bool transparentOccluder) native 'Canvas_drawShadow';
+
+  final List<Object> _dependencies;
 }
 
 /// An object representing a sequence of recorded graphical operations.
@@ -3762,6 +3770,8 @@ class Picture extends NativeFieldWrapperClass2 {
   /// The actual size of this picture may be larger, particularly if it contains
   /// references to image or other large objects.
   int get approximateBytesUsed native 'Picture_GetAllocationSize';
+
+  List<Object> _dependencies;
 }
 
 /// Records a [Picture] containing a sequence of graphical operations.
@@ -3792,7 +3802,17 @@ class PictureRecorder extends NativeFieldWrapperClass2 {
   /// and the canvas objects are invalid and cannot be used further.
   ///
   /// Returns null if the PictureRecorder is not associated with a canvas.
-  Picture endRecording() native 'PictureRecorder_endRecording';
+  Picture endRecording() {
+    final Picture picture = _endRecording();
+    picture._dependencies = _dependencies;
+    return picture;
+  }
+
+  Picture _endRecording() native 'PictureRecorder_endRecording';
+
+  /// Objects that this PictureRecorder and the resulting Picture are dependent on.
+  /// This allows Dart's GC to track relationships inside native code.
+  final List<Object> _dependencies = <Object>[];
 }
 
 /// A single shadow.
